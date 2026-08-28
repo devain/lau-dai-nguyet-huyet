@@ -2,7 +2,7 @@
 
 Game hành động platformer kiểu Castlevania, chạy hoàn toàn trong trình duyệt. **Một file HTML duy nhất** — không build, không dependency, không server.
 
-▶️ **[Chơi ngay](https://devain.github.io/lau-dai-nguyet-huyet/)** *(thay `USERNAME` bằng tên GitHub của bạn sau khi bật Pages)*
+▶️ **[Chơi ngay](https://devain.github.io/Lau-dai-nguyet-huyet/)** *(thay `USERNAME` bằng tên GitHub của bạn sau khi bật Pages)*
 
 ---
 
