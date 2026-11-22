@@ -296,7 +296,32 @@ function startMusic(){
 document.getElementById('menu').onclick=()=>{openMenu();audioUnlock();};
 document.getElementById('mute').onclick=()=>{musicOn=!musicOn;document.getElementById('mute').textContent=(musicOn?'🔊':'🔇')+' Nhạc';audioUnlock();};
 
-/* ================= BẢNG ĐIỂM CAO (window.storage) ================= */
+/* ================= LỚP LƯU TRỮ =================
+   Trong Claude: dùng window.storage (kho riêng của Claude; localStorage bị chặn trong khung đó).
+   Ở nơi khác (GitHub Pages, mở file trên máy): dùng localStorage của trình duyệt.
+   Kiểm tra lúc GỌI chứ không phải lúc tải trang, và không chạm localStorage khi đã có window.storage. */
+let LS_WRAP;
+function lsWrap(){
+  if(LS_WRAP!==undefined) return LS_WRAP;
+  LS_WRAP=null;
+  try{
+    const ls=window.localStorage, t='__nh_probe'; ls.setItem(t,'1'); ls.removeItem(t);   // Safari ẩn danh có thể ném lỗi
+    LS_WRAP={
+      async get(k){ const v=ls.getItem(k); return v==null?null:{key:k,value:v}; },
+      async set(k,v){ try{ ls.setItem(k,v); return {key:k,value:v}; }catch(e){ return null; } },
+      async delete(k){ ls.removeItem(k); return {key:k,deleted:true}; }
+    };
+  }catch(e){}
+  return LS_WRAP;
+}
+const STORE={
+  back(){ return (window.storage&&typeof window.storage.get==='function')?window.storage:lsWrap(); },
+  ok(){ return !!this.back(); },
+  get(k){ const b=this.back(); return b?b.get(k):Promise.resolve(null); },
+  set(k,v){ const b=this.back(); return b?b.set(k,v):Promise.resolve(null); },
+  delete(k){ const b=this.back(); return b?b.delete(k):Promise.resolve(null); }
+};
+/* ================= BẢNG ĐIỂM CAO ================= */
 const SKEY='nguyethuyet:scores:v2';
 const OKEY='nguyethuyet:opt:v1';
 const PKEY='nguyethuyet:prof:v1';
@@ -304,13 +329,13 @@ const RKEY='nguyethuyet:run:v1';
 let hiScores=[], hiReady=false, hiErr='', lastRank=-1, submitted=false;
 async function loadScores(){
   try{
-    if(!window.storage){ hiErr='không có bộ lưu'; hiReady=true; return; }
-    const r=await window.storage.get(SKEY);
+    if(!STORE.ok()){ hiErr='không có bộ lưu'; hiReady=true; return; }
+    const r=await STORE.get(SKEY);
     if(r&&r.value){ const v=JSON.parse(r.value); if(Array.isArray(v)) hiScores=v; }
   }catch(e){ /* chưa có bản ghi nào - không phải lỗi */ }
   try{
-    if(window.storage){
-      const o=await window.storage.get(OKEY);
+    if(STORE.ok()){
+      const o=await STORE.get(OKEY);
       if(o&&o.value){ const v=JSON.parse(o.value); if(typeof v.light==='number') lightLv=Math.max(0,Math.min(2,v.light));
         if(typeof v.pad==='number') padSize=Math.max(0,Math.min(3,v.pad));
         if(typeof v.gap2==='number') padGap=Math.max(0,Math.min(PADW.length-1,v.gap2));   // 'gap' cũ có thứ tự ngược, bỏ qua
@@ -321,8 +346,8 @@ async function loadScores(){
     }
   }catch(e){}
   try{
-    if(window.storage){
-      const r=await window.storage.get(PKEY);
+    if(STORE.ok()){
+      const r=await STORE.get(PKEY);
       if(r&&r.value){ const v=JSON.parse(r.value);
         if(v&&typeof v.lv==='number'){
           prof.lv=Math.max(1,Math.min(LVMAX,v.lv)); prof.xp=Math.max(0,v.xp||0);
@@ -336,8 +361,8 @@ async function loadScores(){
     }
   }catch(e){}
   try{
-    if(window.storage){
-      const r=await window.storage.get(RKEY);
+    if(STORE.ok()){
+      const r=await STORE.get(RKEY);
       if(r&&r.value){
         const v=JSON.parse(r.value);
         const ok=o=>o&&typeof o.stage==='number'&&o.stage>=1&&o.stage<=7;
@@ -358,15 +383,22 @@ function runSnapshot(){
 async function writeSave(quiet){
   if(training) return;
   saves[hero]=runSnapshot();
-  if(!quiet) savedT=90;
-  try{ if(window.storage) await window.storage.set(RKEY,JSON.stringify({slots:saves})); }catch(e){}
+  let ok=false;
+  try{ if(STORE.ok()) ok=!!(await STORE.set(RKEY,JSON.stringify({slots:saves}))); }catch(e){}
+  if(ok){ if(!quiet) savedT=90; }        // chỉ báo ĐÃ LƯU khi thật sự ghi được
+  else warnNoSave();
+}
+let warnedNoSave=false;
+function warnNoSave(){
+  if(warnedNoSave) return; warnedNoSave=true;
+  note('Trình duyệt đang chặn lưu dữ liệu (có thể do chế độ ẩn danh). Tiến độ sẽ mất khi tải lại trang.',8000);
 }
 async function clearSave(){
   saves[hero]=null;
   try{
-    if(window.storage){
-      if(saves[0]||saves[1]) await window.storage.set(RKEY,JSON.stringify({slots:saves}));
-      else await window.storage.delete(RKEY);
+    if(STORE.ok()){
+      if(saves[0]||saves[1]) await STORE.set(RKEY,JSON.stringify({slots:saves}));
+      else await STORE.delete(RKEY);
     }
   }catch(e){}
 }
@@ -392,13 +424,13 @@ function resumeSave(){
 }
 async function saveProf(){
   if(training) return;
-  try{ if(window.storage) await window.storage.set(PKEY,JSON.stringify(prof)); }catch(e){}
+  try{ if(STORE.ok()) await STORE.set(PKEY,JSON.stringify(prof)); }catch(e){}
 }
 async function saveOpt(){
-  try{ if(window.storage) await window.storage.set(OKEY,JSON.stringify({light:lightLv,pad:padSize,gap2:padGap,max:maxStage,dmg:dmgNums})); }catch(e){}
+  try{ if(STORE.ok()) await STORE.set(OKEY,JSON.stringify({light:lightLv,pad:padSize,gap2:padGap,max:maxStage,dmg:dmgNums})); }catch(e){}
 }
 async function saveScores(){
-  try{ if(window.storage) await window.storage.set(SKEY,JSON.stringify(hiScores)); }
+  try{ if(STORE.ok()) await STORE.set(SKEY,JSON.stringify(hiScores)); }
   catch(e){ hiErr='không lưu được'; }
 }
 function submitScore(){
