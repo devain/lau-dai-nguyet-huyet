@@ -167,7 +167,7 @@ addEventListener('keydown',e=>{
   if(/^Digit[1-7]$/.test(e.code)&&(state==='play'||state==='menu')){
     e.preventDefault(); gotoStage(+e.code.slice(5),false);
   }
-  if(e.code==='KeyS'&&(state==='play'||state==='menu')){e.preventDefault();writeSave();}
+  if(e.code==='KeyV'&&(state==='play'||state==='menu')){e.preventDefault();writeSave();}   // V: lưu (S đã là phím xuống của WASD)
   if(e.code==='KeyT'&&(state==='title'||state==='gear')){e.preventDefault();gearFrom='title';startTraining();}
   if(e.code==='KeyG'){e.preventDefault();
     if(state==='title'||state==='play'||state==='menu'){ gearFrom=(state==='title')?'title':'menu'; state='gear'; gearRow=0; }
