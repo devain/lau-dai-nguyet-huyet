@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Lâu Đài Nguyệt Huyết</title>
 <style>
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;background:#0a0710;overflow:hidden;font-family:ui-monospace,Menlo,Consolas,monospace;color:#c8bcd8;touch-action:none;user-select:none}
+  #bar button{touch-action:manipulation}          /* bỏ độ trễ/zoom khi chạm đúp trên iPhone */
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
+     -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}   /* iPhone: không bôi chữ, không kính lúp, không menu Sao chép */
+  html,body{height:100%;background:#0a0710;overflow:hidden;font-family:ui-monospace,Menlo,Consolas,monospace;color:#c8bcd8;touch-action:none;-webkit-user-select:none;user-select:none}
   #wrap{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:6px;overflow:hidden}
   #stage{position:relative;line-height:0;max-width:100%;box-shadow:0 0 0 2px #2a2138,0 0 40px #1b0f2c}
   canvas{display:block;image-rendering:pixelated;max-width:100%;height:auto}
@@ -44,9 +46,7 @@
     .btn{opacity:.62;border-radius:14px;border-width:2px;backdrop-filter:blur(3px);
          box-shadow:0 2px 8px rgba(0,0,0,.45)}
     .btn:active,.btn.on{opacity:1;transform:scale(0.94)}
-    #bar{position:fixed;top:4px;left:8px;font-size:10px;gap:6px;z-index:5;opacity:.55}
-    #bar:hover,#bar:active{opacity:1}
-    #bar span{display:none}
+    #bar{display:none}             /* xoay ngang: ẩn hẳn, Nhạc + Toàn màn hình nằm trong menu ☰ để không che thanh máu */
   }
   @media (orientation:landscape) and (max-height:620px) and (max-width:700px){
     .dpad{grid-template-columns:repeat(3,calc(50px*var(--bs)));grid-template-rows:repeat(3,calc(44px*var(--bs)))}
@@ -82,7 +82,7 @@
     <button id="menu">☰ Menu</button>
     <button id="fs">⛶ Toàn màn</button>
     <button id="mute">🔊 Nhạc</button>
-    <span><b>1–4</b> nhảy màn · <b>C</b> đổi kiếm · <b>Z/J</b> kiếm · <b>X/K</b> nhảy · <b>↑+Z</b> phụ khí · <b>L</b> độ sáng</span>
+    <span><b>1–7</b> nhảy màn · <b>V</b> lưu · <b>C</b> đổi kiếm · <b>Z/J</b> kiếm · <b>X/K</b> nhảy · <b>↑+Z</b> phụ khí · <b>L</b> độ sáng</span>
   </div>
 </div>
 <script>
@@ -151,6 +151,16 @@ document.getElementById('pad').addEventListener('pointerdown',padDown,{passive:f
 addEventListener('pointermove',padMove,{passive:false});
 addEventListener('pointerup',padUp);
 addEventListener('pointercancel',padUp);
+// iPhone/Safari: bôi chữ, kính lúp, menu giữ lâu và zoom chạm đúp đều xảy ra ở sự kiện touch,
+// nên chặn ở đây (chỉ vùng nút điều khiển và màn chơi; thanh Menu/Toàn màn/Nhạc giữ nguyên click).
+for(const el of [document.getElementById('pad'),document.getElementById('stage')]){
+  el.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
+  el.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+  el.addEventListener('touchend',e=>{ e.preventDefault(); audioUnlock(); },{passive:false});   // touchend vẫn mở khoá âm thanh
+}
+addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('selectstart',e=>e.preventDefault());
+document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});   // chụm hai ngón
 addEventListener('blur',()=>{touchMap.clear();syncTouch();});
 let tap=null;
 cv.addEventListener('pointerdown',e=>{
@@ -1728,7 +1738,11 @@ const HSLOT=[176,336], HFEET=192, HBOXT=138, HBOXH=88;
 const PAUSEBTN={x:VW-32,y:52,w:26,h:26};
 const SWBTN={x:VW-32,y:84,w:26,h:26};
 const GEARBTN={x:VW-32,y:116,w:26,h:26};   // khung chân dung
-const MENU=['Tiếp tục','Lưu game','Trang bị & tạo hình','Chơi lại màn','Đổi nhân vật','Độ sáng','Cỡ nút bấm','Số sát thương','Khởi động lại'];
+const MENU=['Tiếp tục','Lưu game','Trang bị & tạo hình','Chơi lại màn','Đổi nhân vật',
+            'Độ sáng','Cỡ nút bấm','Số sát thương','Nhạc','Toàn màn hình','Khởi động lại'];
+// bố cục menu: 5 mục hành động | 5 mục cài đặt | Khởi động lại (tách riêng), vừa khít 288px
+const menuY=i=>50+i*17+(i>=5?8:0)+(i>=10?8:0);
+let resetArm=0;                 // 'Khởi động lại' phải bấm 2 lần trong 3 giây (xoá bản lưu lượt đang chơi)
 let gearFrom='title';
 const cam={x:0,lock:-1};
 const p={x:40,y:240,vx:0,vy:0,w:12,h:26,face:1,onGround:false,hp:16,maxhp:16,hearts:5,whip:0,sub:null,
@@ -6762,28 +6776,35 @@ function draw(){
   if(state==='menu'){
     ctx.fillStyle='rgba(6,4,12,0.82)'; ctx.fillRect(0,0,VW,VH);
     ctx.textAlign='center';
-    ctx.font='bold 16px ui-monospace,monospace';
-    ctx.fillStyle='#1a0e20'; ctx.fillText('TẠM DỪNG',VW/2+2,50);
-    ctx.fillStyle='#e8d8a0'; ctx.fillText('TẠM DỪNG',VW/2,48);
+    ctx.textBaseline='top';
+    ctx.fillStyle='rgba(6,4,12,0.9)'; ctx.fillRect(0,0,VW,46);   // che hẳn HUD sau tiêu đề
+    ctx.font='bold 14px ui-monospace,monospace';
+    ctx.fillStyle='#1a0e20'; ctx.fillText('TẠM DỪNG',VW/2+2,26);
+    ctx.fillStyle='#e8d8a0'; ctx.fillText('TẠM DỪNG',VW/2,24);
+    ctx.fillStyle='#3a2e52';                                   // đường kẻ chia nhóm
+    ctx.fillRect(VW/2-90,menuY(5)-7,180,1); ctx.fillRect(VW/2-90,menuY(10)-7,180,1);
     for(let i=0;i<MENU.length;i++){
-      const yy=94+i*26, sel=menuSel===i;
+      const yy=menuY(i), sel=menuSel===i;
       if(sel){
-        ctx.fillStyle='rgba(120,70,160,0.35)'; ctx.fillRect(VW/2-116,yy-4,232,18);
-        ctx.strokeStyle='#b09050'; ctx.lineWidth=1; ctx.strokeRect(VW/2-115.5,yy-3.5,231,17);
+        ctx.fillStyle='rgba(120,70,160,0.35)'; ctx.fillRect(VW/2-116,yy-3,232,16);
+        ctx.strokeStyle='#b09050'; ctx.lineWidth=1; ctx.strokeRect(VW/2-115.5,yy-2.5,231,15);
       }
-      ctx.font='bold 12px ui-monospace,monospace';
-      ctx.fillStyle=sel?'#f4ead0':'#7d6d99';
+      ctx.font='bold 11px ui-monospace,monospace';
+      ctx.fillStyle=i===10?(sel?'#ff9a9a':'#a05a6a'):(sel?'#f4ead0':'#7d6d99');
       const label=(i===1)?('Lưu game  ·  ô '+HEROES[hero].name+' · màn '+stage)
                  :(i===2)?('Trang bị & tạo hình  ·  Cấp '+prof.lv)
                  :(i===3&&training)?'⟵ Rời bãi tập'
                  :(i===5)?('Độ sáng:  ◂ '+LIGHTS[lightLv].n+' ▸')
                  :(i===6)?('Cỡ nút:  ◂ '+PADS[padSize].n+' ▸')
-                 :(i===7)?('Số sát thương:  ◂ '+(dmgNums?'Bật':'Tắt')+' ▸'):MENU[i];
+                 :(i===7)?('Số sát thương:  ◂ '+(dmgNums?'Bật':'Tắt')+' ▸')
+                 :(i===8)?('Nhạc:  ◂ '+(musicOn?'Bật':'Tắt')+' ▸')
+                 :(i===9)?('Toàn màn hình:  ◂ '+(fsEl()?'Bật':'Tắt')+' ▸')
+                 :(i===10&&frame<resetArm)?'Chạm lần nữa để xoá bản lưu':MENU[i];
       ctx.fillText((sel?'▸ ':'')+label,VW/2,yy+1);
     }
     ctx.font='bold 9px ui-monospace,monospace'; ctx.fillStyle='#6d5f85';
-    ctx.fillText('▲▼ chọn · NHẢY xác nhận · Esc/P đóng',VW/2,248);
-    ctx.fillText('Điểm '+score+' · '+HEROES[hero].name+' · Cấp '+prof.lv+' · '+SWORDNAME[p.whip]+' · MÀN '+stage,VW/2,262);
+    ctx.fillText('chạm để chọn · ▲▼ + NHẢY · Esc/P đóng',VW/2,262);
+    ctx.fillText('Điểm '+score+' · '+HEROES[hero].name+' · Cấp '+prof.lv+' · '+SWORDNAME[p.whip]+' · MÀN '+stage,VW/2,274);
     ctx.textAlign='left';
   }
   if(state==='dead')drawOverlay('NGÃ XUỐNG','Còn '+lives+' mạng','Nhấn NHẢY để tiếp tục');
@@ -6830,7 +6851,16 @@ function update(){
   if(state==='menu'){
     if(K.upP){menuSel=(menuSel+MENU.length-1)%MENU.length;SFX.candle();}
     if(K.downP){menuSel=(menuSel+1)%MENU.length;SFX.candle();}
-    if(K.jumpP||K.atkP){
+    // chạm thẳng vào một mục = chọn + kích hoạt; chạm nút ☰ lần nữa = đóng menu
+    let act=K.jumpP||K.atkP;
+    if(tap){
+      const b=PAUSEBTN;
+      if(tap.x>b.x-8&&tap.x<b.x+b.w+8&&tap.y>b.y-8&&tap.y<b.y+b.h+8){ tap=null; state='play'; return; }
+      if(Math.abs(tap.x-VW/2)<120) for(let i=0;i<MENU.length;i++){
+        const yy=menuY(i); if(tap.y>=yy-4&&tap.y<yy+13){ menuSel=i; act=true; break; } }
+      tap=null;
+    }
+    if(act){
       SFX.item();
       if(menuSel===0) state='play';
       else if(menuSel===1){ writeSave(); state='play'; }
@@ -6840,7 +6870,10 @@ function update(){
       else if(menuSel===5){ lightLv=(lightLv+1)%LIGHTS.length; saveOpt(); }
       else if(menuSel===6){ padSize=(padSize+1)%PADS.length; applyPad(); saveOpt(); }
       else if(menuSel===7){ dmgNums=!dmgNums; saveOpt(); }
-      else fullReset();
+      else if(menuSel===8){ musicOn=!musicOn; document.getElementById('mute').textContent=(musicOn?'🔊':'🔇')+' Nhạc'; audioUnlock(); }
+      else if(menuSel===9){ toggleFS(); }
+      else if(frame<resetArm){ resetArm=0; fullReset(); }
+      else resetArm=frame+180;                         // lần đầu: chỉ hỏi xác nhận
     }
     return;
   }
