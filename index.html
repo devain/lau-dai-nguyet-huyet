@@ -12,7 +12,7 @@
   #wrap{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:6px;overflow:hidden}
   #stage{position:relative;line-height:0;max-width:100%;box-shadow:0 0 0 2px #2a2138,0 0 40px #1b0f2c}
   canvas{display:block;image-rendering:pixelated;max-width:100%;height:auto}
-  #pad{width:100%;max-width:760px;display:none;justify-content:space-between;align-items:flex-end;gap:10px;padding:0 4px}
+  #pad{width:100%;max-width:var(--padw,480px);display:none;justify-content:space-between;align-items:flex-end;gap:10px;padding:0 4px}
   :root{--bs:1}
   .cluster{display:grid;gap:6px;padding:12px;border-radius:16px}
   .dpad{grid-template-columns:repeat(3,calc(54px*var(--bs)));grid-template-rows:repeat(3,calc(46px*var(--bs)))}
@@ -35,7 +35,7 @@
          (orientation:landscape) and (max-height:620px) and (max-width:960px){
     #wrap{padding:0;gap:0}
     #stage{box-shadow:none}
-    #pad{position:fixed;left:0;right:0;display:flex;justify-content:space-between;
+    #pad{position:fixed;left:0;right:0;max-width:none;display:flex;justify-content:space-between;
          align-items:flex-end;gap:0;pointer-events:none;z-index:4;
          bottom:calc(10px + env(safe-area-inset-bottom,0px));
          padding-left:calc(6px + env(safe-area-inset-left,0px));
@@ -312,6 +312,7 @@ async function loadScores(){
       const o=await window.storage.get(OKEY);
       if(o&&o.value){ const v=JSON.parse(o.value); if(typeof v.light==='number') lightLv=Math.max(0,Math.min(2,v.light));
         if(typeof v.pad==='number') padSize=Math.max(0,Math.min(3,v.pad));
+        if(typeof v.gap==='number') padGap=Math.max(0,Math.min(PADW.length-1,v.gap));
         if(typeof v.max==='number') maxStage=Math.max(1,Math.min(7,v.max));
         if(typeof v.dmg==='boolean') dmgNums=v.dmg;
         selStage=maxStage;
@@ -393,7 +394,7 @@ async function saveProf(){
   try{ if(window.storage) await window.storage.set(PKEY,JSON.stringify(prof)); }catch(e){}
 }
 async function saveOpt(){
-  try{ if(window.storage) await window.storage.set(OKEY,JSON.stringify({light:lightLv,pad:padSize,max:maxStage,dmg:dmgNums})); }catch(e){}
+  try{ if(window.storage) await window.storage.set(OKEY,JSON.stringify({light:lightLv,pad:padSize,gap:padGap,max:maxStage,dmg:dmgNums})); }catch(e){}
 }
 async function saveScores(){
   try{ if(window.storage) await window.storage.set(SKEY,JSON.stringify(hiScores)); }
@@ -1726,12 +1727,16 @@ const INTROLEN=170;   // đủ dài để đọc câu dẫn
 const LIGHTS=[{n:'Sáng',d:0.08},{n:'Vừa',d:0.18},{n:'Tối',d:0.32}];
 const PADS=[{n:'Nhỏ',s:0.85},{n:'Vừa',s:1},{n:'To',s:1.22},{n:'Rất to',s:1.45}];
 let padSize=1;
+// khoảng cách hai cụm nút (màn hình rộng như iPad): độ rộng tối đa của dải nút, nhân theo cỡ nút
+const PADW=[{n:'Gần',w:480},{n:'Vừa',w:600},{n:'Rộng',w:760}];
+let padGap=0;
 let dmgNums=true;
 let maxStage=1, selStage=1;
 let saves=[null,null], savedT=0;
 function curSave(){ return saves[hero]; }
 const STAGENAMES=['','TIỀN ĐÌNH','HẦM MỘ','THÁP ĐỒNG HỒ','MÁI THÁP','ĐIỆN NGUYỆT HUYẾT','VỰC NGUYỆT','TÂM NGUYỆT'];
 function applyPad(){ document.documentElement.style.setProperty('--bs',PADS[padSize].s);
+  document.documentElement.style.setProperty('--padw',Math.round(PADW[padGap].w*PADS[padSize].s)+'px');
   SNAP=Math.round(30*PADS[padSize].s+6); if(typeof fit==='function')fit(); }
 let lightLv=1;                                   // mặc định Vừa
 const HSLOT=[176,336], HFEET=192, HBOXT=138, HBOXH=88;
@@ -1739,9 +1744,10 @@ const PAUSEBTN={x:VW-32,y:52,w:26,h:26};
 const SWBTN={x:VW-32,y:84,w:26,h:26};
 const GEARBTN={x:VW-32,y:116,w:26,h:26};   // khung chân dung
 const MENU=['Tiếp tục','Lưu game','Trang bị & tạo hình','Chơi lại màn','Đổi nhân vật',
-            'Độ sáng','Cỡ nút bấm','Số sát thương','Nhạc','Toàn màn hình','Khởi động lại'];
-// bố cục menu: 5 mục hành động | 5 mục cài đặt | Khởi động lại (tách riêng), vừa khít 288px
-const menuY=i=>50+i*17+(i>=5?8:0)+(i>=10?8:0);
+            'Độ sáng','Cỡ nút bấm','Khoảng cách nút','Số sát thương','Nhạc','Toàn màn hình','Khởi động lại'];
+// bố cục menu: 5 mục hành động | 6 mục cài đặt | Khởi động lại (tách riêng), vừa khít 288px
+const MRESET=11;
+const menuY=i=>48+i*16+(i>=5?8:0)+(i>=MRESET?8:0);
 let resetArm=0;                 // 'Khởi động lại' phải bấm 2 lần trong 3 giây (xoá bản lưu lượt đang chơi)
 let gearFrom='title';
 const cam={x:0,lock:-1};
@@ -6782,24 +6788,25 @@ function draw(){
     ctx.fillStyle='#1a0e20'; ctx.fillText('TẠM DỪNG',VW/2+2,26);
     ctx.fillStyle='#e8d8a0'; ctx.fillText('TẠM DỪNG',VW/2,24);
     ctx.fillStyle='#3a2e52';                                   // đường kẻ chia nhóm
-    ctx.fillRect(VW/2-90,menuY(5)-7,180,1); ctx.fillRect(VW/2-90,menuY(10)-7,180,1);
+    ctx.fillRect(VW/2-90,menuY(5)-6,180,1); ctx.fillRect(VW/2-90,menuY(MRESET)-6,180,1);
     for(let i=0;i<MENU.length;i++){
       const yy=menuY(i), sel=menuSel===i;
       if(sel){
-        ctx.fillStyle='rgba(120,70,160,0.35)'; ctx.fillRect(VW/2-116,yy-3,232,16);
-        ctx.strokeStyle='#b09050'; ctx.lineWidth=1; ctx.strokeRect(VW/2-115.5,yy-2.5,231,15);
+        ctx.fillStyle='rgba(120,70,160,0.35)'; ctx.fillRect(VW/2-116,yy-2,232,15);
+        ctx.strokeStyle='#b09050'; ctx.lineWidth=1; ctx.strokeRect(VW/2-115.5,yy-1.5,231,14);
       }
       ctx.font='bold 11px ui-monospace,monospace';
-      ctx.fillStyle=i===10?(sel?'#ff9a9a':'#a05a6a'):(sel?'#f4ead0':'#7d6d99');
+      ctx.fillStyle=i===MRESET?(sel?'#ff9a9a':'#a05a6a'):(sel?'#f4ead0':'#7d6d99');
       const label=(i===1)?('Lưu game  ·  ô '+HEROES[hero].name+' · màn '+stage)
                  :(i===2)?('Trang bị & tạo hình  ·  Cấp '+prof.lv)
                  :(i===3&&training)?'⟵ Rời bãi tập'
                  :(i===5)?('Độ sáng:  ◂ '+LIGHTS[lightLv].n+' ▸')
                  :(i===6)?('Cỡ nút:  ◂ '+PADS[padSize].n+' ▸')
-                 :(i===7)?('Số sát thương:  ◂ '+(dmgNums?'Bật':'Tắt')+' ▸')
-                 :(i===8)?('Nhạc:  ◂ '+(musicOn?'Bật':'Tắt')+' ▸')
-                 :(i===9)?('Toàn màn hình:  ◂ '+(fsEl()?'Bật':'Tắt')+' ▸')
-                 :(i===10&&frame<resetArm)?'Chạm lần nữa để xoá bản lưu':MENU[i];
+                 :(i===7)?('Khoảng cách nút:  ◂ '+PADW[padGap].n+' ▸')
+                 :(i===8)?('Số sát thương:  ◂ '+(dmgNums?'Bật':'Tắt')+' ▸')
+                 :(i===9)?('Nhạc:  ◂ '+(musicOn?'Bật':'Tắt')+' ▸')
+                 :(i===10)?('Toàn màn hình:  ◂ '+(fsEl()?'Bật':'Tắt')+' ▸')
+                 :(i===MRESET&&frame<resetArm)?'Chạm lần nữa để xoá bản lưu':MENU[i];
       ctx.fillText((sel?'▸ ':'')+label,VW/2,yy+1);
     }
     ctx.font='bold 9px ui-monospace,monospace'; ctx.fillStyle='#6d5f85';
@@ -6857,7 +6864,7 @@ function update(){
       const b=PAUSEBTN;
       if(tap.x>b.x-8&&tap.x<b.x+b.w+8&&tap.y>b.y-8&&tap.y<b.y+b.h+8){ tap=null; state='play'; return; }
       if(Math.abs(tap.x-VW/2)<120) for(let i=0;i<MENU.length;i++){
-        const yy=menuY(i); if(tap.y>=yy-4&&tap.y<yy+13){ menuSel=i; act=true; break; } }
+        const yy=menuY(i); if(tap.y>=yy-2&&tap.y<yy+14){ menuSel=i; act=true; break; } }
       tap=null;
     }
     if(act){
@@ -6869,9 +6876,10 @@ function update(){
       else if(menuSel===4){state='title';buildStage(1);p.cp=0;resetStage(true);}
       else if(menuSel===5){ lightLv=(lightLv+1)%LIGHTS.length; saveOpt(); }
       else if(menuSel===6){ padSize=(padSize+1)%PADS.length; applyPad(); saveOpt(); }
-      else if(menuSel===7){ dmgNums=!dmgNums; saveOpt(); }
-      else if(menuSel===8){ musicOn=!musicOn; document.getElementById('mute').textContent=(musicOn?'🔊':'🔇')+' Nhạc'; audioUnlock(); }
-      else if(menuSel===9){ toggleFS(); }
+      else if(menuSel===7){ padGap=(padGap+1)%PADW.length; applyPad(); saveOpt(); }
+      else if(menuSel===8){ dmgNums=!dmgNums; saveOpt(); }
+      else if(menuSel===9){ musicOn=!musicOn; document.getElementById('mute').textContent=(musicOn?'🔊':'🔇')+' Nhạc'; audioUnlock(); }
+      else if(menuSel===10){ toggleFS(); }
       else if(frame<resetArm){ resetArm=0; fullReset(); }
       else resetArm=frame+180;                         // lần đầu: chỉ hỏi xác nhận
     }
